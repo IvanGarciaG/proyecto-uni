@@ -1,0 +1,191 @@
+version: "3.9"
+
+services:
+
+  # ─── Infrastructure ────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: usersdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      SA_PASSWORD: "Admin123!"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1433:1433"
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"   # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+
+  seq:
+    image: datalust/seq:latest
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:80"
+
+  # ─── API Gateway ────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/ApiGateway/ApiGateway.API/Dockerfile
+    ports:
+      - "5000:8080"
+    depends_on:
+      - users-service
+      - orders-service
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+
+  # ─── Microservices ───────────────────────────────────────────────
+  users-service:
+    build:
+      context: .
+      dockerfile: src/Services/Users/Users.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Database=usersdb;Username=admin;Password=admin123
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__User=admin
+      - RabbitMQ__Password=admin123
+    depends_on:
+      - postgres
+      - rabbitmq
+
+  orders-service:
+    build:
+      context: .
+      dockerfile: src/Services/Orders/Orders.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__SqlServer=Server=sqlserver;Database=ordersdb;User Id=sa;Password=Admin123!;TrustServerCertificate=True
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__User=admin
+      - RabbitMQ__Password=admin123
+    depends_on:
+      - sqlserver
+      - rabbitmq
+
+  products-service:
+    build:
+      context: .
+      dockerfile: src/Services/Products/Products.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - MongoDB__ConnectionString=mongodb://mongodb:27017
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__User=admin
+      - RabbitMQ__Password=admin123
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  identity-service:
+    build:
+      context: .
+      dockerfile: src/Services/Identity/Identity.API/Dockerfile
+    ports:
+      - "5001:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Database=identitydb;Username=admin;Password=admin123
+      - GoogleAuth__ClientId=${GOOGLE_CLIENT_ID}
+      - GoogleAuth__ClientSecret=${GOOGLE_CLIENT_SECRET}
+      - Jwt__Secret=${JWT_SECRET}
+      - Jwt__Issuer=identity-service
+      - Jwt__Audience=microservices
+      - Jwt__ExpiryMinutes=60
+    depends_on:
+      - postgres
+
+  location-service:
+    build:
+      context: .
+      dockerfile: src/Services/Location/Location.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Database=locationdb;Username=admin;Password=admin123
+      - Auth__Authority=http://identity-service:8080
+      - Auth__Audience=microservices
+    depends_on:
+      - postgres
+      - identity-service
+
+  geocoding-service:
+    build:
+      context: .
+      dockerfile: src/Services/Geocoding/Geocoding.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - GoogleMaps__ApiKey=${GOOGLE_MAPS_API_KEY}
+      - Auth__Authority=http://identity-service:8080
+      - Auth__Audience=microservices
+    depends_on:
+      - identity-service
+
+  notifications-service:
+    build:
+      context: .
+      dockerfile: src/Services/Notifications/Notifications.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Smtp__Host=sandbox.smtp.mailtrap.io
+      - Smtp__Port=587
+      - Smtp__Username=${MAILTRAP_USER}
+      - Smtp__Password=${MAILTRAP_PASSWORD}
+      - Smtp__FromAddress=noreply@tu-app.com
+      - Smtp__FromName=Tu App
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__User=admin
+      - RabbitMQ__Password=admin123
+      - Auth__Authority=http://identity-service:8080
+      - Auth__Audience=microservices
+    depends_on:
+      - rabbitmq
+      - identity-service
+
+  files-service:
+    build:
+      context: .
+      dockerfile: src/Services/Files/Files.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__Postgres=Host=postgres;Database=filesdb;Username=admin;Password=admin123
+      - FileUpload__Provider=Local
+      - FileUpload__MaxFileSizeBytes=10485760
+      - FileUpload__LocalBasePath=/app/uploads
+    volumes:
+      - files_uploads:/app/uploads
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+  mongo_data:
+  files_uploads:

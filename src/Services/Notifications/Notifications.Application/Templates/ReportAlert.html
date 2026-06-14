@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f4f4f4; margin:0; padding:0; }
+    .container { max-width:600px; margin:40px auto; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,.1); }
+    .header { background:#1a56db; color:#fff; padding:24px 32px; }
+    .header h1 { margin:0; font-size:20px; }
+    .body { padding:32px; color:#333; line-height:1.6; }
+    .body h2 { color:#1a56db; margin-top:0; }
+    .meta { background:#f9f9f9; border-left:4px solid #1a56db; padding:12px 16px; margin:20px 0; font-size:14px; }
+    .btn { display:inline-block; margin-top:24px; padding:12px 28px; background:#1a56db; color:#fff; text-decoration:none; border-radius:6px; font-weight:bold; }
+    .footer { padding:16px 32px; font-size:12px; color:#999; border-top:1px solid #eee; text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Nuevo reporte disponible</h1>
+    </div>
+    <div class="body">
+      <p>Hola <strong>{{model.ToName}}</strong>,</p>
+      <p>Se ha generado un nuevo reporte que requiere tu atención:</p>
+
+      <h2>{{model.ReportTitle}}</h2>
+      <p>{{model.ReportDescription}}</p>
+
+      <div class="meta">
+        <strong>Generado el:</strong> {{model.GeneratedAt}}
+      </div>
+
+      <a class="btn" href="{{model.ReportUrl}}">Ver reporte completo</a>
+    </div>
+    <div class="footer">
+      Este es un mensaje automático. Por favor no respondas a este correo.
+    </div>
+  </div>
+</body>
+</html>
